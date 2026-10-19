@@ -1,0 +1,29 @@
+#include <tunables/global>
+
+profile my-apparmor-profile flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  # Permit the Python runtime and application files needed to start Flask.
+  /usr/local/bin/python3.11 ix,
+  /usr/local/bin/python3 ix,
+  /usr/local/** rix,
+  /lib/** r,
+  /usr/lib/** r,
+  /app/** rw,
+  /tmp/** rw,
+  /dev/null rw,
+  /dev/urandom r,
+  /proc/** r,
+
+  # Flask listens on TCP port 5000 and checks network interfaces during startup.
+  network inet stream,
+  network inet dgram,
+  capability net_bind_service,
+
+  # Restrict sensitive paths and high-risk actions.
+  deny /etc/** r,
+  deny /var/** rw,
+  deny /bin/** rx,
+  deny /usr/bin/** rx,
+  deny capability sys_admin,
+}
