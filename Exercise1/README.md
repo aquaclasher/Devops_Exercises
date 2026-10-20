@@ -1,32 +1,44 @@
-# Exercise 1: Kubernetes Hello Pod
+# Exercise 1: Kubernetes Getting Started (Hello Pod)
 
-This exercise deploys the Nginx web server as a Kubernetes Pod and exposes it through a `NodePort` Service.
+## Objective
+Deploy an Nginx web server application as a Pod on a local Kubernetes cluster using Minikube and expose it via a NodePort Service for browser access.
 
-## Prerequisites installed
-
+## Prerequisites
 - Docker Desktop
-- Minikube v1.39.0
-- kubectl v1.36.1
+- Minikube
+- kubectl CLI
 
-## Run
+## Implementation Files
+- `pod.yaml`: Kubernetes Pod manifest running the `nginx` container on port 80.
+- `service.yaml`: Kubernetes Service manifest of type `NodePort` exposing the `hello-k8s` Pod.
 
-```powershell
-minikube start --driver=docker
-kubectl apply -f pod.yaml
-kubectl apply -f service.yaml
-kubectl get pods -w
-kubectl get services
-minikube service hello-k8s
-```
+## Steps to Execute
 
-## Files
+1. **Start Minikube**:
+   ```bash
+   minikube start --driver=docker
+   ```
 
-- `pod.yaml` defines the `hello-k8s` Pod, running Nginx on port 80.
-- `service.yaml` defines a `NodePort` Service that selects that Pod using its `app: hello-k8s` label.
+2. **Deploy the Pod and Service**:
+   ```bash
+   kubectl apply -f pod.yaml
+   kubectl apply -f service.yaml
+   ```
 
-## Clean up
+3. **Verify Deployment**:
+   ```bash
+   kubectl get pods
+   kubectl get services
+   ```
 
-```powershell
+4. **Access the Application**:
+   ```bash
+   minikube service hello-k8s
+   ```
+   This opens the default browser displaying the "Welcome to nginx!" welcome page.
+
+## Clean Up
+```bash
 kubectl delete -f service.yaml
 kubectl delete -f pod.yaml
 ```

@@ -1,27 +1,30 @@
-"""Build, run, inspect, and stop the Flask container with an AppArmor profile."""
-
 import docker
 
-IMAGE = "flask-apparmor"
-PROFILE = "my-apparmor-profile"
-
+# Create a Docker client
 client = docker.from_env()
 
+# Build the Docker image
 print("Building image from Dockerfile...")
-client.images.build(path=".", tag=IMAGE)
+client.images.build(path=".", tag="flask-apparmor")
 
+# Run the container with the AppArmor profile
 print("Running container with AppArmor profile...")
 container = client.containers.run(
-    IMAGE,
-    ports={"5000/tcp": 5000},
-    security_opt=[f"apparmor={PROFILE}"],
-    detach=True,
+    "flask-apparmor",
+    ports={'5000/tcp': 5000},
+    security_opt=["apparmor=my-apparmor-profile"],
+    detach=True
 )
 
-try:
-    print(f"Container started: {container.short_id}")
-    container_info = client.api.inspect_container(container.id)
-    print(f"AppArmor profile applied: {container_info['HostConfig']['SecurityOpt']}")
-finally:
-    print("Stopping container...")
-    container.stop()
+print(f"Container started: {container.short_id}")
+
+# Verify AppArmor profile applied
+print("Inspecting container to verify AppArmor profile...")
+container_info = client.api.inspect_container(container.id)
+apparmor_profile = container_info['HostConfig']['SecurityOpt']
+
+print(f"AppArmor profile applied: {apparmor_profile}")
+
+# Stop the container
+print("Stopping container...")
+container.stop()

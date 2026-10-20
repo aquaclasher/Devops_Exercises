@@ -1,62 +1,105 @@
-# Exercise 5: Docker Security with AppArmor
+# Exercise 5: Docker Security with AppArmor and Python
 
-This project contains a Flask container, an AppArmor confinement profile, and Docker SDK scripts to apply and test the profile.
+## Objective
+Understand how to secure Docker containers using Linux AppArmor profiles and the Docker SDK for Python. Implement and apply an AppArmor security profile that confines a Flask web application, restricting access to sensitive system paths (e.g., `/etc/`) and blocking unauthorized binary executions (e.g., `/bin/bash`).
 
-## Important platform requirement
+## Prerequisites
+- Linux host or virtual machine with AppArmor enabled (`sudo aa-status`)
+- Docker installed and running
+- Python 3 with `pip`
+- `apparmor-utils` installed:
+  ```bash
+  sudo apt-get update
+  sudo apt-get install -y apparmor-utils
+  ```
 
-AppArmor is enforced by the **Linux Docker host kernel**, not by the container image. This Windows computer uses Docker Desktop's WSL backend, whose kernel reports AppArmor as disabled. Therefore, building the image works here, but loading or enforcing `my-apparmor-profile` does not.
+## Implementation Files
+- `app.py`: Flask web application running on port 5000.
+- `Dockerfile`: Container image specification based on `python:3.8-slim`.
+- `my-apparmor-profile`: AppArmor security profile defining directory restrictions, network allowances, and binary execution blocks.
+- `apply_apparmor.py`: Python automation script using Docker SDK to build the image, run the container with the security profile, inspect `HostConfig.SecurityOpt`, and stop the container.
+- `test_restricted_actions.py`: Python script verifying security confinement by attempting restricted actions (`cat /etc/passwd` and executing `/bin/bash`).
+- `requirements.txt`: Python dependencies (`flask`, `docker`).
 
-Run the security-enforcement steps below on an Ubuntu/Debian Linux Docker host with AppArmor enabled. Verify first:
+## Steps to Execute
 
+### Step 1: Install Python Dependencies
 ```bash
-sudo aa-status
-docker info | grep -i apparmor
+pip install -r requirements.txt
 ```
 
-## Build the application image
-
+### Step 2: Build the Container Image
 ```bash
 docker build -t flask-apparmor .
 ```
 
-## Install and load the profile (Linux host only)
-
+### Step 3: Load the AppArmor Profile
+Copy the profile to the system AppArmor directory and load it into the Linux kernel:
 ```bash
-sudo apt-get update
-sudo apt-get install -y apparmor apparmor-utils
 sudo cp my-apparmor-profile /etc/apparmor.d/my-apparmor-profile
 sudo apparmor_parser -r /etc/apparmor.d/my-apparmor-profile
+```
+
+Verify that the profile is active:
+```bash
 sudo aa-status | grep my-apparmor-profile
 ```
 
-## Run with the profile
-
+### Step 4: Run Container with AppArmor Profile (Docker CLI)
 ```bash
-docker run --rm --security-opt="apparmor=my-apparmor-profile" -p 5000:5000 flask-apparmor
+docker run -d --name flask-secure --security-opt="apparmor=my-apparmor-profile" -p 5000:5000 flask-apparmor
 ```
-
-In another terminal:
-
+Verify the endpoint responds:
 ```bash
 curl http://127.0.0.1:5000/
+docker stop flask-secure && docker rm flask-secure
 ```
 
-## Docker SDK scripts (Linux host only)
-
+### Step 5: Apply and Verify AppArmor via Docker SDK
+Run the automated script to build, deploy, and inspect the security configuration:
 ```bash
-python3 -m pip install -r requirements-dev.txt
 python3 apply_apparmor.py
+```
+**Expected Output:**
+```text
+Building image from Dockerfile...
+Running container with AppArmor profile...
+Container started: <container_id>
+Inspecting container to verify AppArmor profile...
+AppArmor profile applied: ['apparmor=my-apparmor-profile']
+Stopping container...
+```
+
+### Step 6: Test Restricted Actions
+Run the verification test script:
+```bash
 python3 test_restricted_actions.py
 ```
+**Expected Output:**
+```text
+Container started: <container_id>
+Attempt to read /etc/passwd: Exit Code 1, Output: cat: /etc/passwd: Permission denied
+Attempt to execute /bin/bash: Exit Code 126, Output:
+Container stopped
+```
+- **Exit Code 1 on `/etc/passwd`**: Confirms read access to `/etc/**` is blocked by AppArmor policy.
+- **Exit Code 126 on `/bin/bash`**: Confirms shell binary execution is blocked by AppArmor policy.
 
-`apply_apparmor.py` builds the image, starts a container with the profile, prints `HostConfig.SecurityOpt`, and stops it. `test_restricted_actions.py` verifies that reading `/etc/passwd` and executing `/bin/bash` are denied.
+---
 
-## Evidence to capture
+## Questions & Answers
 
-1. `aa-status` showing AppArmor enabled and `my-apparmor-profile` loaded.
-2. `docker inspect` or `apply_apparmor.py` showing `apparmor=my-apparmor-profile` in `SecurityOpt`.
-3. The restricted-action script showing non-zero exit codes for the protected read and `/bin/bash` execution.
+**Q1: What is the purpose of using AppArmor with Docker containers?**  
+**A1:** AppArmor provides Mandatory Access Control (MAC) to enforce security confinement on containerized processes, restricting their access to system files, capabilities, network resources, and binaries even if the container is breached or running as root.
 
-## Why this cannot be enforced locally
+**Q2: How do AppArmor profiles help secure a Docker container?**  
+**A2:** Profiles define explicit whitelists and blacklists for file paths, network operations, raw capabilities, and execution permissions. This limits the blast radius of any exploit to only the explicitly allowed operations.
 
-The current Docker Desktop host reports `N` at `/sys/module/apparmor/parameters/enabled` and has no `name=apparmor` entry in `docker info` security options. Docker therefore cannot apply a custom AppArmor profile on this host.
+**Q3: Why is it important to restrict access to sensitive directories such as `/etc/` and `/var/`?**  
+**A3:** Directories like `/etc/` contain critical authentication data, system credentials, and configuration files, while `/var/` holds logs and runtime data. Restricting access prevents attackers from exfiltrating credentials or tampering with system state.
+
+**Q4: What other capabilities can you restrict using AppArmor profiles?**  
+**A4:** AppArmor can restrict network sockets (raw, inet, packet), binding to privileged ports, POSIX capabilities (e.g., `CAP_SYS_ADMIN`, `CAP_NET_ADMIN`), inter-process communication (IPC), and execution of specific shells/interpreters.
+
+**Q5: How can you verify if an AppArmor profile is successfully applied to a Docker container?**  
+**A5:** By inspecting the container using `docker inspect <container>` or via the Docker SDK (`container.attrs['HostConfig']['SecurityOpt']`), which lists the active `apparmor=<profile_name>` assignment.

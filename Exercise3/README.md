@@ -1,74 +1,96 @@
-# Exercise 3: Scale a Flask Flash-Sale App with a ReplicaSet
+# Exercise 3: Scaling Flask App on Single Node Using ReplicaSets
 
-This exercise runs a flash-sale Flask application in a Kubernetes `ReplicaSet`. Kubernetes begins with three identical Pods, scales to five, and replaces a manually deleted Pod to preserve the desired count.
+## Objective
+Understand Kubernetes ReplicaSets and Pod lifecycle, scale a Flask flash-sale application dynamically, observe pod distribution, and verify automatic self-healing when a pod is terminated.
 
 ## Prerequisites
+- Docker Desktop
+- Minikube
+- kubectl CLI
 
-- Docker Desktop running
-- A running, single-node Minikube cluster
-- kubectl
+## Implementation Files
+- `app.py`: Flask application simulating an e-commerce flash sale with `/`, `/buy`, and `/health` endpoints. Displays the serving Pod hostname.
+- `requirements.txt`: Python package dependencies (`flask`, `gunicorn`).
+- `Dockerfile`: Container image packaging the application with Gunicorn.
+- `flashsale-replicaset.yaml`: Kubernetes `ReplicaSet` (initial replicas: 3) with readiness/liveness probes and resource limits, along with a ClusterIP `Service`.
 
-> The existing Minikube cluster is already single-node. Do not run `minikube delete`: it would remove the running work from earlier exercises and is not needed for this exercise.
+## Steps to Execute
 
-## Build and deploy (Windows PowerShell)
+1. **Build and Load the Docker Image**:
+   ```bash
+   docker build -t flashsale:1.0 .
+   minikube image load flashsale:1.0
+   ```
 
-```powershell
-docker build -t flashsale:1.0 .
-minikube image load flashsale:1.0
-kubectl apply -f flashsale-replicaset.yaml
-kubectl wait --for=condition=ready pod -l app=flashsale --timeout=120s
-kubectl get rs flashsale-rs
-kubectl get pods -l app=flashsale -o wide
-```
+2. **Apply the ReplicaSet Configuration**:
+   ```bash
+   kubectl apply -f flashsale-replicaset.yaml
+   ```
 
-## Demonstrate scaling
+3. **Verify Pods and ReplicaSet (Initial State = 3 replicas)**:
+   ```bash
+   kubectl get rs flashsale-rs
+   kubectl get pods -l app=flashsale -o wide
+   ```
 
-```powershell
-kubectl scale rs flashsale-rs --replicas=5
-kubectl wait --for=condition=ready pod -l app=flashsale --timeout=120s
-kubectl get rs flashsale-rs
-kubectl get pods -l app=flashsale -o wide
-```
+4. **Scale the ReplicaSet to 5 Replicas**:
+   ```bash
+   kubectl scale rs flashsale-rs --replicas=5
+   ```
 
-## Demonstrate self-healing
+5. **Verify the Scaled Replicas**:
+   ```bash
+   kubectl get rs flashsale-rs
+   kubectl get pods -l app=flashsale -o wide
+   ```
 
-Choose a current Pod name from `kubectl get pods -l app=flashsale`, then run:
+6. **Demonstrate Self-Healing**:
+   Delete one of the running pods manually:
+   ```bash
+   kubectl delete pod <pod-name>
+   ```
+   Watch the pods to verify ReplicaSet instantly launches a replacement:
+   ```bash
+   kubectl get pods -l app=flashsale -w
+   ```
 
-```powershell
-kubectl delete pod <pod-name>
-kubectl get pods -l app=flashsale -w
-```
+7. **Test Endpoints via Port Forwarding**:
+   ```bash
+   kubectl port-forward service/flashsale-svc 8080:80
+   ```
+   In a separate terminal:
+   ```bash
+   curl http://127.0.0.1:8080/
+   curl "http://127.0.0.1:8080/buy?user=student"
+   curl http://127.0.0.1:8080/health
+   ```
 
-The ReplicaSet creates a replacement Pod so that five Pods are again ready. Press `Ctrl+C` to stop watching once it appears.
-
-## Test through the Service
-
-Because `flashsale-svc` is a `ClusterIP` Service, port-forward it locally for testing:
-
-```powershell
-kubectl port-forward service/flashsale-svc 8080:80
-```
-
-In a second terminal:
-
-```powershell
-curl http://127.0.0.1:8080/
-curl "http://127.0.0.1:8080/buy?user=student"
-curl http://127.0.0.1:8080/health
-```
-
-The JSON response includes the Pod hostname. Repeating requests can show different Pods serving traffic.
-
-## Verify
-
-```powershell
-kubectl describe rs flashsale-rs
-kubectl get pods -l app=flashsale -o wide
-kubectl logs -l app=flashsale --prefix --tail=20
-```
-
-## Clean up
-
-```powershell
+## Clean Up
+```bash
 kubectl delete -f flashsale-replicaset.yaml
 ```
+
+---
+
+## Questions & Answers
+
+**Q1: What is the initial number of replicas in the ReplicaSet?**  
+**A1:** 3
+
+**Q2: How many pods are running after applying the ReplicaSet configuration?**  
+**A2:** 3
+
+**Q3: What happens when you scale the ReplicaSet to 5 replicas?**  
+**A3:** Kubernetes creates 2 additional pods to match the desired replica count of 5.
+
+**Q4: What happens when you delete one pod?**  
+**A4:** Kubernetes automatically creates a new replacement pod to maintain the desired count of 5 replicas.
+
+**Q5: How does Kubernetes maintain the desired number of replicas?**  
+**A5:** The ReplicaSet controller continuously monitors the cluster state, compares actual running pods matching the label selector against `spec.replicas`, and adds or terminates pods to reconcile differences.
+
+**Q6: How many nodes are running?**  
+**A6:** 1 (single-node Minikube cluster).
+
+**Q7: Where are the pods running with respect to nodes?**  
+**A7:** All 5 pods are scheduled and running on the single `minikube` node.

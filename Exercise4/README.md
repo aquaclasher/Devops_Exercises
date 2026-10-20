@@ -1,48 +1,86 @@
 # Exercise 4: Docker Networking with Multiple Containers
 
-This exercise attaches a Flask API, MySQL database, and Redis cache to one user-defined Docker bridge network. Docker provides internal DNS, so containers can use `mysql` and `redis` as hostnames.
+## Objective
+Understand Docker networking concepts, create a custom bridge network, and deploy a multi-tier containerized system consisting of a Flask API, MySQL database, and Redis cache communicating via container name DNS resolution.
 
-## Run (Windows PowerShell)
+## Prerequisites
+- Docker Desktop
 
-Build the API image and create the bridge network:
+## Implementation Files
+- `app.py`: REST API built with Flask exposing `/about` on port 5001.
+- `requirements.txt`: Python package dependencies (`Flask==2.0.1`).
+- `Dockerfile`: Container image specification based on `python:3.9-slim`.
 
-```powershell
-$MYSQL_ROOT_PASSWORD = Read-Host -Prompt "Enter MySQL Root Password"
-docker build -t flask-api .
-docker network create --driver bridge my-bridge-net
-docker network ls
-docker network inspect my-bridge-net
-```
+## Steps to Execute
 
-Start all three containers. `MYSQL_ROOT_PASSWORD` is mandatory for current official MySQL images and is passed using the `-e` flag below.
+1. **Create the Custom Bridge Network**:
+   ```bash
+   docker network create --driver bridge my-bridge-net
+   ```
 
-```powershell
-docker run -d --name mysql --net=my-bridge-net -e MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD mysql:latest
-docker run -d --name redis --net=my-bridge-net redis:latest
-docker run -d --name flask --net=my-bridge-net -p 5001:5001 flask-api
-```
+2. **Verify and Inspect the Network**:
+   ```bash
+   docker network ls
+   docker network inspect my-bridge-net
+   ```
 
-## Verify
+3. **Build the Flask API Container Image**:
+   ```bash
+   docker build -t flask-api .
+   ```
 
-```powershell
-docker ps
-docker network inspect my-bridge-net
-Invoke-WebRequest http://127.0.0.1:5001/about | Select-Object -ExpandProperty Content
-```
+4. **Launch the Multi-Container Stack**:
+   Start MySQL, Redis, and Flask on the shared network:
+   ```bash
+   docker run -d --name mysql --net=my-bridge-net -e MYSQL_ROOT_PASSWORD=rootpassword mysql:latest
+   docker run -d --name redis --net=my-bridge-net redis:latest
+   docker run -d --name flask --net=my-bridge-net -p 5001:5001 flask-api
+   ```
 
-Test Docker DNS and TCP reachability from the Flask container:
+5. **Verify Running Containers**:
+   ```bash
+   docker ps
+   ```
 
-```powershell
-docker exec flask python -c "import socket; print('mysql:', socket.gethostbyname('mysql')); print('redis:', socket.gethostbyname('redis'))"
-docker exec flask python -c "import socket; [print(host, socket.create_connection((host, port), 5).close() or 'TCP reachable') for host, port in [('mysql', 3306), ('redis', 6379)]]"
-```
+6. **Test Application Endpoint**:
+   ```bash
+   curl http://127.0.0.1:5001/about
+   ```
+   Expected response:
+   ```json
+   {
+     "description": "This is a simple REST API built with Flask.",
+     "name": "Simple REST API",
+     "version": "1.0"
+   }
+   ```
 
-`python:3.9-slim` does not include the `ping` program. These commands verify the same important networking behavior: Docker DNS resolves the container names and the target ports accept connections.
+7. **Test Inter-Container Connectivity**:
+   Verify DNS name resolution and network reachability from the Flask container:
+   ```bash
+   docker exec flask python -c "import socket; print('mysql:', socket.gethostbyname('mysql')); print('redis:', socket.gethostbyname('redis'))"
+   docker exec flask python -c "import socket; [print(h, socket.create_connection((h, p), 5).close() or 'reachable') for h, p in [('mysql', 3306), ('redis', 6379)]]"
+   ```
 
-## Clean up
-
-```powershell
+## Clean Up
+```bash
 docker stop mysql redis flask
 docker rm mysql redis flask
 docker network rm my-bridge-net
 ```
+
+---
+
+## Questions & Answers
+
+**Q1: What is the purpose of the `--net` flag in `docker run`?**  
+**A1:** The `--net` (or `--network`) flag specifies the Docker network to which the container should be attached upon creation.
+
+**Q2: How do containers communicate with each other on the same custom bridge network?**  
+**A2:** Containers on a custom bridge network use Docker's embedded DNS server to resolve each other's container names into internal IP addresses.
+
+**Q3: What is the difference between a bridge network and a host network?**  
+**A3:** A bridge network provides network isolation, assigning containers their own private IP subnet and virtual network interface. A host network bypasses network isolation, placing the container directly on the host's network stack where container ports bind directly to host interfaces.
+
+**Q4: How can you expose a container's port to the host machine?**  
+**A4:** Use the `-p` (or `--publish`) flag during `docker run` in the format `-p <host_port>:<container_port>` (e.g., `-p 5001:5001`).
