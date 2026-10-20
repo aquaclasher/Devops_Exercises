@@ -1,5 +1,7 @@
 # Exercise 7: Jenkins Installation and Introduction to CI/CD Tools
 
+## Please note that the core requirements of this exercise were already achieved in Exercise 6
+
 ## Objective
 Understand the core principles and benefits of Continuous Integration (CI), examine industry-standard CI/CD tools, deploy Jenkins LTS using Docker Desktop on Windows, and complete initial administrative configuration.
 
